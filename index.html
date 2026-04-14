@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Монитор статусов</title>
+</head>
+<body>
+  <h1>Мой статус</h1>
+
+  <p>Имя: <span id="username">Загрузка...</span></p>
+  <p>Статус: <span id="status">Загрузка...</span></p>
+
+  <input id="newStatus" type="text" placeholder="Введите новый статус" />
+  <button id="saveBtn">Сохранить</button>
+
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+
+    // 1) ВСТАВЬ СВОИ ДАННЫЕ ИЗ SUPABASE
+    const supabaseUrl = 'https://bpqsplgcfjimwmktqcrm.supabase.co';
+    const supabaseKey = 'sb_publishable_hhmpufmhNttQEafoLzptFQ_YQctMs_m';
+
+    // 2) ТВОЙ ID ИЗ ТАБЛИЦЫ
+    const myId = '39fa789a-add0-4d68-a08f-84423533db09';
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const usernameEl = document.getElementById('username');
+    const statusEl = document.getElementById('status');
+    const inputEl = document.getElementById('newStatus');
+    const saveBtn = document.getElementById('saveBtn');
+
+    async function loadProfile() {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', myId)
+        .single();
+
+      if (error) {
+        console.error(error);
+        return;
+      }
+
+      usernameEl.textContent = data.username;
+      statusEl.textContent = data.status || 'Нет статуса';
+    }
+
+    saveBtn.addEventListener('click', async () => {
+      const newStatus = inputEl.value;
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({ status: newStatus })
+        .eq('id', myId);
+
+      if (error) {
+        console.error(error);
+        alert('Ошибка сохранения');
+        return;
+      }
+
+      inputEl.value = '';
+    });
+
+    // realtime обновление
+    supabase
+      .channel('profiles-status-channel')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${myId}`,
+        },
+        (payload) => {
+          statusEl.textContent = payload.new.status;
+        }
+      )
+      .subscribe();
+
+    loadProfile();
+  </script>
+</body>
+</html>
