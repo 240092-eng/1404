@@ -4,84 +4,172 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Монитор статусов</title>
-</head>
-<body>
-  <h1>Мой статус</h1>
 
-  <p>Имя: <span id="username">Загрузка...</span></p>
-  <p>Статус: <span id="status">Загрузка...</span></p>
-
-  <input id="newStatus" type="text" placeholder="Введите новый статус" />
-  <button id="saveBtn">Сохранить</button>
-
-  <script type="module">
-    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
-
-    // 1) ВСТАВЬ СВОИ ДАННЫЕ ИЗ SUPABASE
-    const supabaseUrl = 'https://bpqsplgcfjimwmktqcrm.supabase.co';
-    const supabaseKey = 'sb_publishable_hhmpufmhNttQEafoLzptFQ_YQctMs_m';
-
-    // 2) ТВОЙ ID ИЗ ТАБЛИЦЫ
-    const myId = '39fa789a-add0-4d68-a08f-84423533db09';
-
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    const usernameEl = document.getElementById('username');
-    const statusEl = document.getElementById('status');
-    const inputEl = document.getElementById('newStatus');
-    const saveBtn = document.getElementById('saveBtn');
-
-    async function loadProfile() {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', myId)
-        .single();
-
-      if (error) {
-        console.error(error);
-        return;
-      }
-
-      usernameEl.textContent = data.username;
-      statusEl.textContent = data.status || 'Нет статуса';
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #ffd6e7, #d6e6ff, #e9d6ff, #fff3b0);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
 
-    saveBtn.addEventListener('click', async () => {
-      const newStatus = inputEl.value;
+    .container {
+      width: 420px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
 
-      const { error } = await supabase
-        .from('profiles')
-        .update({ status: newStatus })
-        .eq('id', myId);
+    .card {
+      background: white;
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    }
 
-      if (error) {
-        console.error(error);
-        alert('Ошибка сохранения');
-        return;
-      }
+    h2 {
+      margin: 0 0 10px 0;
+    }
 
-      inputEl.value = '';
-    });
+    .btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
 
-    // realtime обновление
-    supabase
-      .channel('profiles-status-channel')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'profiles',
-          filter: `id=eq.${myId}`,
-        },
-        (payload) => {
-          statusEl.textContent = payload.new.status;
-        }
-      )
-      .subscribe();
+    button {
+      border: none;
+      padding: 10px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: 0.2s;
+    }
 
+    button:hover {
+      transform: scale(1.05);
+    }
+
+    .green { background: #7cf5a6; }
+    .yellow { background: #ffe66d; }
+    .blue { background: #7cc7ff; }
+    .gray { background: #cfcfcf; }
+
+    input {
+      width: 100%;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid #ddd;
+      margin-top: 10px;
+    }
+
+    .group-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid #eee;
+    }
+
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <div class="card">
+    <h2>Мой профиль</h2>
+    <p>Имя: <b id="username">Загрузка...</b></p>
+    <p>Статус: <b id="status">Загрузка...</b></p>
+
+    <input id="newStatus" placeholder="Введите новый статус" />
+
+    <div class="btn-row">
+      <button class="green" onclick="setStatus('Учёба')">📚 Учёба</button>
+      <button class="yellow" onclick="setStatus('Кофе')">☕ Кофе</button>
+      <button class="blue" onclick="setStatus('В игре')">🎮 В игре</button>
+      <button class="gray" onclick="setStatus('Дома')">🏠 Дома</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Монитор группы</h2>
+    <div id="group"></div>
+  </div>
+
+</div>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+
+const supabaseUrl = 'https://bpqsplgcfjimwmktqcrm.supabase.co';
+const supabaseKey = 'sb_publishable_hhmpufmhNttQEafoLzptFQ_YQctMs_m';
+const myId = '39fa789a-add0-4d68-a08f-84423533db09';
+
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+const usernameEl = document.getElementById('username');
+const statusEl = document.getElementById('status');
+const groupEl = document.getElementById('group');
+
+async function loadProfile() {
+  const { data } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', myId)
+    .single();
+
+  if (data) {
+    usernameEl.textContent = data.username;
+    statusEl.textContent = data.status || 'Нет статуса';
+  }
+}
+
+async function loadGroup() {
+  const { data } = await supabase
+    .from('profiles')
+    .select('*');
+
+  groupEl.innerHTML = '';
+
+  data.forEach(user => {
+    const div = document.createElement('div');
+    div.className = 'group-item';
+    div.innerHTML = `<span>${user.username}</span><span>${user.status || '—'}</span>`;
+    groupEl.appendChild(div);
+  });
+}
+
+window.setStatus = async function(status) {
+  await supabase
+    .from('profiles')
+    .update({ status })
+    .eq('id', myId);
+
+  loadProfile();
+  loadGroup();
+}
+
+// realtime
+supabase
+  .channel('group-channel')
+  .on('postgres_changes', {
+    event: '*',
+    schema: 'public',
+    table: 'profiles'
+  }, () => {
     loadProfile();
-  </script>
+    loadGroup();
+  })
+  .subscribe();
+
+loadProfile();
+loadGroup();
+
+</script>
+
 </body>
 </html>
